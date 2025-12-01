@@ -41,3 +41,6 @@ virtualenv/
 # OS
 .DS_Store
 Thumbs.db
+
+# Falcon user data
+.falcon/
