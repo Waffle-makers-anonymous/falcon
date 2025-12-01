@@ -172,17 +172,18 @@ class ScreeningStrategy:
 PREDEFINED_STRATEGIES = {
     "momentum_long": ScreeningStrategy(
         name="momentum_long",
-        description="Long-biased momentum trading - Top % gainers with volume",
+        description="Ross Cameron style momentum - Low float, high volume % gainers in $2-$20 range",
         scan_code="TOP_PERC_GAIN",
         filters=ScreenFilters(
-            price_min=5.0,
-            price_max=500.0,
+            price_min=2.0,
+            price_max=20.0,
             volume_min=1_000_000,
-            market_cap_min=100_000_000,
+            market_cap_min=10_000_000,    # ~10M min for low float
+            market_cap_max=500_000_000,   # ~500M max to capture small caps
         ),
         bias=TradingBias.LONG,
         style=TradingStyle.MOMENTUM,
-        tags=["momentum", "long", "gainers"],
+        tags=["momentum", "long", "gainers", "ross_cameron", "day_trading"],
     ),
 
     "short_bias": ScreeningStrategy(
