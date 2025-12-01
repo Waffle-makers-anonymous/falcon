@@ -43,20 +43,23 @@ class ScreenResult:
 class Screener:
     """Stock screener using IB Gateway"""
 
-    def __init__(self, connection: IBConnection):
+    def __init__(self, connection: IBConnection, database=None):
         """
         Initialize screener with IB connection
 
         Args:
             connection: Active IBConnection instance
+            database: Optional ScreenDatabase for persisting results
         """
         self.connection = connection
         self.ib = connection.ib
+        self.database = database
 
     async def run_strategy(
         self,
         strategy: ScreeningStrategy,
-        max_results: int = 50
+        max_results: int = 50,
+        save_to_db: bool = True
     ) -> List[ScreenResult]:
         """
         Execute a screening strategy
@@ -64,6 +67,7 @@ class Screener:
         Args:
             strategy: ScreeningStrategy to execute
             max_results: Maximum number of results to return
+            save_to_db: Whether to save results to database (if database is configured)
 
         Returns:
             List of ScreenResult objects
@@ -92,6 +96,10 @@ class Screener:
         # Update strategy performance
         strategy.performance.update_run(len(results))
         strategy.update_modified()
+
+        # Save to database if configured
+        if save_to_db and self.database and results:
+            self.database.save_screen_run(strategy, results)
 
         return results
 
