@@ -1,6 +1,6 @@
 [project]
 name = "falcon"
-version = "0.1.0"
+version = "0.0.1a"
 description = "Interactive Brokers trading application"
 requires-python = ">=3.10"
 dependencies = [
