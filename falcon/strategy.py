@@ -188,17 +188,18 @@ PREDEFINED_STRATEGIES = {
 
     "short_bias": ScreeningStrategy(
         name="short_bias",
-        description="Short-biased trading - Top % losers with high volume",
-        scan_code="TOP_PERC_LOSE",
+        description="Alex Temiz style shorts - Overextended parabolic gainers due for pullback",
+        scan_code="TOP_PERC_GAIN",  # Looking for stocks that went UP too much
         filters=ScreenFilters(
-            price_min=5.0,
-            price_max=500.0,
-            volume_min=1_000_000,
-            market_cap_min=100_000_000,
+            price_min=1.0,
+            price_max=30.0,
+            volume_min=2_000_000,       # High volume = retail interest/pump
+            market_cap_min=5_000_000,   # Very small caps for big moves
+            market_cap_max=300_000_000, # Not too large - need volatility
         ),
         bias=TradingBias.SHORT,
-        style=TradingStyle.MOMENTUM,
-        tags=["momentum", "short", "losers"],
+        style=TradingStyle.MEAN_REVERSION,  # Fading overextended moves
+        tags=["short", "overextended", "parabolic", "alex_temiz", "fade"],
     ),
 
     "high_volume_breakout": ScreeningStrategy(
