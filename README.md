@@ -4,6 +4,24 @@ A Python application for connecting to Interactive Brokers IB Gateway and monito
 
 ## Setup
 
+### Virtual Environment (Recommended)
+
+For local development, it's recommended to use a virtual environment to avoid disrupting your system Python:
+
+```bash
+# Create virtual environment
+python -m venv .falcon_py
+
+# Activate virtual environment
+source .falcon_py/bin/activate  # Linux/Mac
+# OR
+.falcon_py\Scripts\activate     # Windows
+```
+
+**Note**: Virtual environments are recommended for local development but not required. Container deployments can use the system Python directly.
+
+### Installation
+
 1. Copy `.env.example` to `.env` and configure your settings:
    ```bash
    cp .env.example .env
