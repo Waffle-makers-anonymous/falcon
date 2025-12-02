@@ -25,6 +25,14 @@ def _get_trading_mode() -> str:
     return os.getenv("TRADING_MODE", "paper")
 
 
+def _get_account() -> str | None:
+    return os.getenv("IB_ACCOUNT")
+
+
+def _get_location_code() -> str:
+    return os.getenv("LOCATION_CODE", "STK.US.MAJOR")
+
+
 @dataclass
 class IBConfig:
     """Interactive Brokers Gateway configuration"""
@@ -33,6 +41,8 @@ class IBConfig:
     port: int = field(default_factory=_get_port)
     client_id: int = field(default_factory=_get_client_id)
     trading_mode: str = field(default_factory=_get_trading_mode)
+    account: str | None = field(default_factory=_get_account)
+    location_code: str = field(default_factory=_get_location_code)
 
     @property
     def is_paper_trading(self) -> bool:
@@ -48,6 +58,10 @@ class IBConfig:
         expected_port = 4001 if self.is_paper_trading else 4002
         if self.port != expected_port:
             print(f"Warning: Port {self.port} doesn't match convention for {self.trading_mode} trading (expected {expected_port})")
+
+        # Warn if running in live mode without a specific account configured
+        if not self.is_paper_trading and self.account is None:
+            print("Warning: Running in live mode without IB_ACCOUNT specified. Will use default account from IB Gateway.")
 
 
 def get_config() -> IBConfig:

@@ -28,6 +28,19 @@ class IBConnection:
             )
 
             self._connected = True
+
+            # Display account information
+            accounts = self.get_accounts()
+            if accounts:
+                print(f"Available accounts: {', '.join(accounts)}")
+                if self.config.account:
+                    if self.config.account in accounts:
+                        print(f"Using configured account: {self.config.account}")
+                    else:
+                        print(f"Warning: Configured account {self.config.account} not found in available accounts!")
+                else:
+                    print(f"Using default account: {accounts[0]}")
+
             print("Successfully connected to IB Gateway!")
             return True
 
@@ -59,12 +72,15 @@ class IBConnection:
         if not self.is_connected:
             raise ConnectionError("Not connected to IB Gateway")
 
-        # If no account specified, use the first available account
+        # If no account specified, use configured account or first available account
         if account is None:
-            accounts = self.get_accounts()
-            if not accounts:
-                raise ValueError("No accounts available")
-            account = accounts[0]
+            if self.config.account:
+                account = self.config.account
+            else:
+                accounts = self.get_accounts()
+                if not accounts:
+                    raise ValueError("No accounts available")
+                account = accounts[0]
 
         # Request account summary
         summary_tags = [
@@ -93,10 +109,13 @@ class IBConnection:
             raise ConnectionError("Not connected to IB Gateway")
 
         if account is None:
-            accounts = self.get_accounts()
-            if not accounts:
-                raise ValueError("No accounts available")
-            account = accounts[0]
+            if self.config.account:
+                account = self.config.account
+            else:
+                accounts = self.get_accounts()
+                if not accounts:
+                    raise ValueError("No accounts available")
+                account = accounts[0]
 
         # Subscribe to account updates
         self.ib.reqAccountUpdates(account)

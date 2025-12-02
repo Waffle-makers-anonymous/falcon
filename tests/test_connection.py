@@ -200,6 +200,39 @@ class TestIBConnectionAccountSummary:
         assert summary["account"] == "DUE692582"
         mock_ib.accountSummaryAsync.assert_called_once_with("DUE692582")
 
+    async def test_get_account_summary_configured_account(self, monkeypatch, mock_ib):
+        """Test getting account summary with configured account from config"""
+        monkeypatch.setenv("IB_ACCOUNT", "U1234567")
+        config = IBConfig()
+
+        with patch("falcon.connection.IB", return_value=mock_ib):
+            conn = IBConnection(config)
+            conn._connected = True
+            mock_ib.isConnected.return_value = True
+
+            summary = await conn.get_account_summary()
+
+        # Should use configured account, not the first from managedAccounts
+        assert summary["account"] == "U1234567"
+        mock_ib.accountSummaryAsync.assert_called_once_with("U1234567")
+
+    async def test_get_account_summary_configured_account_overrides_default(self, monkeypatch, mock_ib):
+        """Test that configured account takes precedence over first available account"""
+        monkeypatch.setenv("IB_ACCOUNT", "U7654321")
+        mock_ib.managedAccounts.return_value = ["DUE692582", "U7654321", "U9999999"]
+        config = IBConfig()
+
+        with patch("falcon.connection.IB", return_value=mock_ib):
+            conn = IBConnection(config)
+            conn._connected = True
+            mock_ib.isConnected.return_value = True
+
+            summary = await conn.get_account_summary()
+
+        # Should use configured account U7654321, not first account DUE692582
+        assert summary["account"] == "U7654321"
+        mock_ib.accountSummaryAsync.assert_called_once_with("U7654321")
+
     async def test_get_account_summary_not_connected(self, mock_env_vars, mock_ib):
         """Test get_account_summary when not connected"""
         config = IBConfig()
@@ -223,6 +256,77 @@ class TestIBConnectionAccountSummary:
 
             with pytest.raises(ValueError, match="No accounts available"):
                 await conn.get_account_summary()
+
+
+@pytest.mark.unit
+class TestIBConnectionAccountUpdates:
+    """Tests for account updates subscription"""
+
+    async def test_subscribe_account_updates_default_account(self, mock_env_vars, mock_ib):
+        """Test subscribing to account updates with default (first) account"""
+        config = IBConfig()
+
+        with patch("falcon.connection.IB", return_value=mock_ib):
+            conn = IBConnection(config)
+            conn._connected = True
+            mock_ib.isConnected.return_value = True
+
+            await conn.subscribe_account_updates()
+
+        mock_ib.reqAccountUpdates.assert_called_once_with("DUE692582")
+
+    async def test_subscribe_account_updates_configured_account(self, monkeypatch, mock_ib):
+        """Test subscribing to account updates with configured account"""
+        monkeypatch.setenv("IB_ACCOUNT", "U1234567")
+        config = IBConfig()
+
+        with patch("falcon.connection.IB", return_value=mock_ib):
+            conn = IBConnection(config)
+            conn._connected = True
+            mock_ib.isConnected.return_value = True
+
+            await conn.subscribe_account_updates()
+
+        # Should use configured account, not the first from managedAccounts
+        mock_ib.reqAccountUpdates.assert_called_once_with("U1234567")
+
+    async def test_subscribe_account_updates_explicit_account(self, mock_env_vars, mock_ib):
+        """Test subscribing to account updates with explicitly specified account"""
+        config = IBConfig()
+
+        with patch("falcon.connection.IB", return_value=mock_ib):
+            conn = IBConnection(config)
+            conn._connected = True
+            mock_ib.isConnected.return_value = True
+
+            await conn.subscribe_account_updates("EXPLICIT123")
+
+        # Explicit account parameter should override configured account
+        mock_ib.reqAccountUpdates.assert_called_once_with("EXPLICIT123")
+
+    async def test_subscribe_account_updates_not_connected(self, mock_env_vars, mock_ib):
+        """Test subscribe_account_updates when not connected"""
+        config = IBConfig()
+
+        with patch("falcon.connection.IB", return_value=mock_ib):
+            conn = IBConnection(config)
+            conn._connected = False
+
+            with pytest.raises(ConnectionError, match="Not connected to IB Gateway"):
+                await conn.subscribe_account_updates()
+
+    async def test_subscribe_account_updates_no_accounts(self, mock_env_vars, mock_ib):
+        """Test subscribe_account_updates when no accounts available"""
+        config = IBConfig()
+        mock_ib.managedAccounts.return_value = []
+
+        with patch("falcon.connection.IB", return_value=mock_ib):
+            conn = IBConnection(config)
+            conn._connected = True
+            mock_ib.isConnected.return_value = True
+
+            with pytest.raises(ValueError, match="No accounts available"):
+                await conn.subscribe_account_updates()
 
 
 @pytest.mark.unit

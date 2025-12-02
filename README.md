@@ -40,6 +40,39 @@ source .falcon_py/bin/activate  # Linux/Mac
 - `IB_PORT`: IB Gateway port (4001 for paper trading, 4002 for live)
 - `IB_CLIENT_ID`: Client ID for connection (default: 1)
 - `TRADING_MODE`: Trading mode (paper or live)
+- `IB_ACCOUNT`: (Optional) Specific account ID to use for live trading
+- `LOCATION_CODE`: Scanner location code for market filtering (default: STK.US.MAJOR)
+
+### Configuring a Single Account for Live Mode
+
+When running in live mode, it's recommended to explicitly specify a single account ID to prevent accidental trading on misconfigured accounts. Add the account ID to your `.env` file:
+
+```bash
+IB_ACCOUNT=U1234567
+TRADING_MODE=live
+```
+
+Without specifying `IB_ACCOUNT`, the application will use the default account from IB Gateway, which may not be the intended trading account. Explicitly setting the account ID ensures you're trading on the correct account and helps prevent configuration errors.
+
+### Configuring Scanner Location Code
+
+The `LOCATION_CODE` parameter controls which markets the scanner searches. Common options:
+
+```bash
+# Major US exchanges only (NYSE, NASDAQ, AMEX) - excludes OTC/Pink Sheets
+LOCATION_CODE=STK.US.MAJOR
+
+# All US stocks including OTC (requires Pink Sheets data subscription)
+LOCATION_CODE=STK.US
+
+# NASDAQ only
+LOCATION_CODE=STK.NASDAQ
+
+# NYSE only
+LOCATION_CODE=STK.NYSE
+```
+
+**Recommended**: Use `STK.US.MAJOR` to avoid OTC/Pink Sheet stocks that require additional market data subscriptions.
 
 ## Usage
 

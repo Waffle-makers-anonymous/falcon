@@ -14,7 +14,11 @@ async def display_account_info(conn: IBConnection):
         accounts = conn.get_accounts()
         print(f"\nAvailable accounts: {', '.join(accounts)}")
 
-        # Get account summary for the first account
+        # Show if a specific account is configured
+        if conn.config.account:
+            print(f"Configured account: {conn.config.account}")
+
+        # Get account summary (will use configured account if set)
         summary = await conn.get_account_summary()
 
         print("\n" + "=" * 60)

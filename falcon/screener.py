@@ -14,15 +14,18 @@ class ScreenResult:
     symbol: str
     rank: int
     contract_id: int
-    exchange: str
-    currency: str
 
     # Market data
+    price: Optional[float] = None
+    volume: Optional[int] = None
+    impl_volatility: Optional[float] = None  # Implied volatility (annualized)
+
+    # Original scanner fields (kept for compatibility)
+    exchange: Optional[str] = None
+    currency: Optional[str] = None
     distance: Optional[str] = None
     benchmark: Optional[str] = None
     projection: Optional[str] = None
-
-    # Additional metadata
     legs_str: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -31,6 +34,9 @@ class ScreenResult:
             "symbol": self.symbol,
             "rank": self.rank,
             "contract_id": self.contract_id,
+            "price": self.price,
+            "volume": self.volume,
+            "impl_volatility": self.impl_volatility,
             "exchange": self.exchange,
             "currency": self.currency,
             "distance": self.distance,
@@ -81,27 +87,43 @@ class Screener:
         # Create scanner subscription
         scanner = self._create_scanner_subscription(strategy)
 
-        # Request scanner data
-        scanner_data = await self.ib.reqScannerDataAsync(scanner)
+        try:
+            # Request scanner data with timeout
+            print(f"  Requesting scanner data...")
+            scanner_data = await self.ib.reqScannerDataAsync(scanner)
 
-        # Convert to ScreenResult objects
-        results = []
-        for i, item in enumerate(scanner_data[:max_results]):
-            result = self._scanner_item_to_result(item, i + 1)
+            print(f"  Received {len(scanner_data)} items from scanner")
 
-            # Apply additional filters if needed
-            if self._passes_filters(result, strategy.filters):
-                results.append(result)
+            # Convert to ScreenResult objects
+            results = []
+            for i, item in enumerate(scanner_data[:max_results]):
+                result = self._scanner_item_to_result(item, i + 1)
 
-        # Update strategy performance
-        strategy.performance.update_run(len(results))
-        strategy.update_modified()
+                # Apply additional filters if needed
+                if self._passes_filters(result, strategy.filters):
+                    results.append(result)
 
-        # Save to database if configured
-        if save_to_db and self.database and results:
-            self.database.save_screen_run(strategy, results)
+            # Fetch market data for all results
+            if results:
+                print(f"  Fetching market data for {len(results)} results...")
+                await self._fetch_market_data(results)
 
-        return results
+            # Update strategy performance
+            strategy.performance.update_run(len(results))
+            strategy.update_modified()
+
+            # Save to database if configured
+            if save_to_db and self.database and results:
+                self.database.save_screen_run(strategy, results)
+
+            return results
+
+        except Exception as e:
+            print(f"  Scanner error: {type(e).__name__}: {e}")
+            # Update strategy performance even on error
+            strategy.performance.update_run(0)
+            strategy.update_modified()
+            raise
 
     def _create_scanner_subscription(
         self,
@@ -109,9 +131,12 @@ class Screener:
     ) -> ScannerSubscription:
         """Create IB scanner subscription from strategy"""
 
+        # Use config location_code if available, otherwise use strategy's location_code
+        location_code = self.connection.config.location_code if hasattr(self.connection.config, 'location_code') else strategy.location_code
+
         scanner_params = {
             "instrument": strategy.instrument,
-            "locationCode": strategy.location_code,
+            "locationCode": location_code,
             "scanCode": strategy.scan_code,
         }
 
@@ -127,11 +152,16 @@ class Screener:
         if filters.volume_min is not None:
             scanner_params["aboveVolume"] = filters.volume_min
 
-        # Add market cap filters
+        # Add market cap filters (values in millions)
         if filters.market_cap_min is not None:
-            scanner_params["marketCapAbove"] = filters.market_cap_min
+            # Convert from actual value to millions for IB API
+            scanner_params["marketCapAbove"] = filters.market_cap_min / 1_000_000
         if filters.market_cap_max is not None:
-            scanner_params["marketCapBelow"] = filters.market_cap_max
+            # Convert from actual value to millions for IB API
+            scanner_params["marketCapBelow"] = filters.market_cap_max / 1_000_000
+
+        # Debug: Print scanner parameters
+        print(f"  Scanner params: {scanner_params}")
 
         return ScannerSubscription(**scanner_params)
 
@@ -155,6 +185,53 @@ class Screener:
             projection=item.projection,
             legs_str=item.legsStr,
         )
+
+    async def _fetch_market_data(self, results: List[ScreenResult]) -> None:
+        """
+        Fetch current market data for screening results
+
+        Updates each result with:
+        - price: Last traded price
+        - volume: Current day volume
+        - impl_volatility: Implied volatility (annualized %)
+        """
+        from ib_insync import Stock
+        import asyncio
+
+        for result in results:
+            try:
+                # Create contract for the stock
+                contract = Stock(result.symbol, 'SMART', 'USD')
+
+                # Qualify the contract
+                await self.ib.qualifyContractsAsync(contract)
+
+                # Request market data snapshot
+                ticker = self.ib.reqMktData(contract, '', True, False)
+
+                # Wait a bit for data to arrive
+                await asyncio.sleep(1)
+
+                # Extract market data
+                if ticker.last and ticker.last > 0:
+                    result.price = ticker.last
+                elif ticker.close and ticker.close > 0:
+                    result.price = ticker.close
+
+                if ticker.volume and ticker.volume > 0:
+                    result.volume = int(ticker.volume)
+
+                if ticker.impliedVolatility and ticker.impliedVolatility > 0:
+                    # Convert to percentage (IV is returned as decimal, e.g., 0.5 = 50%)
+                    result.impl_volatility = ticker.impliedVolatility * 100
+
+                # Cancel the market data subscription
+                self.ib.cancelMktData(contract)
+
+            except Exception as e:
+                # If we can't get market data for a symbol, just skip it
+                print(f"    Warning: Could not fetch market data for {result.symbol}: {e}")
+                continue
 
     def _passes_filters(
         self,
@@ -231,22 +308,37 @@ def format_screen_results(
         return f"\n{strategy_name}: No results found\n"
 
     output = [
-        f"\n{'='*80}",
+        f"\n{'='*100}",
         f"{strategy_name.upper()} - {len(results)} Results",
-        f"{'='*80}",
-        f"{'Rank':<6} {'Symbol':<10} {'Exchange':<12} {'Currency':<8} {'Distance':<10}",
-        f"{'-'*80}"
+        f"{'='*100}",
+        f"{'Rank':<6} {'Symbol':<10} {'Price':<12} {'Volume':<15} {'Impl Vol %':<12}",
+        f"{'-'*100}"
     ]
 
     for result in results:
+        # Format price
+        price_str = f"${result.price:.2f}" if result.price else "N/A"
+
+        # Format volume with commas
+        if result.volume:
+            volume_str = f"{result.volume:,}"
+        else:
+            volume_str = "N/A"
+
+        # Format implied volatility
+        if result.impl_volatility:
+            iv_str = f"{result.impl_volatility:.1f}%"
+        else:
+            iv_str = "N/A"
+
         output.append(
             f"{result.rank:<6} "
             f"{result.symbol:<10} "
-            f"{result.exchange:<12} "
-            f"{result.currency:<8} "
-            f"{result.distance or 'N/A':<10}"
+            f"{price_str:<12} "
+            f"{volume_str:<15} "
+            f"{iv_str:<12}"
         )
 
-    output.append(f"{'='*80}\n")
+    output.append(f"{'='*100}\n")
 
     return "\n".join(output)

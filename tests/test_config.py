@@ -16,6 +16,7 @@ class TestIBConfig:
         assert config.port == 4001
         assert config.client_id == 1
         assert config.trading_mode == "paper"
+        assert config.account is None
 
     def test_paper_trading_mode(self, monkeypatch):
         """Test paper trading mode detection"""
@@ -78,6 +79,53 @@ class TestIBConfig:
 
         assert config.client_id == 5
 
+    def test_custom_account(self, monkeypatch, mock_env_vars):
+        """Test custom account configuration"""
+        monkeypatch.setenv("IB_ACCOUNT", "U1234567")
+        config = IBConfig()
+
+        assert config.account == "U1234567"
+
+    def test_account_none_by_default(self, monkeypatch, mock_env_vars):
+        """Test that account is None when not configured"""
+        monkeypatch.delenv("IB_ACCOUNT", raising=False)
+        config = IBConfig()
+
+        assert config.account is None
+
+    def test_live_mode_without_account_warning(self, monkeypatch, capsys):
+        """Test warning when running in live mode without IB_ACCOUNT"""
+        monkeypatch.setenv("TRADING_MODE", "live")
+        monkeypatch.setenv("IB_PORT", "4002")
+        monkeypatch.delenv("IB_ACCOUNT", raising=False)
+
+        IBConfig()
+        captured = capsys.readouterr()
+
+        assert "Warning" in captured.out
+        assert "live mode without IB_ACCOUNT" in captured.out
+
+    def test_live_mode_with_account_no_warning(self, monkeypatch, capsys):
+        """Test no warning when running in live mode with IB_ACCOUNT configured"""
+        monkeypatch.setenv("TRADING_MODE", "live")
+        monkeypatch.setenv("IB_PORT", "4002")
+        monkeypatch.setenv("IB_ACCOUNT", "U1234567")
+
+        IBConfig()
+        captured = capsys.readouterr()
+
+        assert "live mode without IB_ACCOUNT" not in captured.out
+
+    def test_paper_mode_without_account_no_warning(self, monkeypatch, capsys):
+        """Test no warning in paper mode without IB_ACCOUNT"""
+        monkeypatch.setenv("TRADING_MODE", "paper")
+        monkeypatch.delenv("IB_ACCOUNT", raising=False)
+
+        IBConfig()
+        captured = capsys.readouterr()
+
+        assert "live mode without IB_ACCOUNT" not in captured.out
+
     def test_get_config_function(self, mock_env_vars):
         """Test get_config helper function"""
         config = get_config()
@@ -94,7 +142,7 @@ class TestConfigEdgeCases:
     def test_missing_env_vars_use_defaults(self, monkeypatch):
         """Test that missing env vars fall back to defaults"""
         # Clear all env vars
-        for key in ["IB_HOST", "IB_PORT", "IB_CLIENT_ID", "TRADING_MODE"]:
+        for key in ["IB_HOST", "IB_PORT", "IB_CLIENT_ID", "TRADING_MODE", "IB_ACCOUNT"]:
             monkeypatch.delenv(key, raising=False)
 
         config = IBConfig()
@@ -103,6 +151,7 @@ class TestConfigEdgeCases:
         assert config.port == 4001
         assert config.client_id == 1
         assert config.trading_mode == "paper"
+        assert config.account is None
 
     def test_port_as_string(self, monkeypatch, mock_env_vars):
         """Test that port string is converted to int"""

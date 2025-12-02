@@ -60,7 +60,7 @@ async def main():
 
         # Run strategies
         all_results = {}
-        for strategy in strategies_to_run:
+        for i, strategy in enumerate(strategies_to_run):
             print(f"Executing: {strategy.name}...")
             try:
                 results = await screener.run_strategy(strategy, max_results=25)
@@ -73,6 +73,12 @@ async def main():
             except Exception as e:
                 print(f"  Error: {e}")
                 all_results[strategy.name] = []
+
+            # Add delay between strategies to avoid IB scanner subscription limits
+            # Skip delay after the last strategy
+            if i < len(strategies_to_run) - 1:
+                print("  Waiting 3 seconds before next strategy...")
+                await asyncio.sleep(3)
 
         # Display all results
         print("\n" + "="*80)

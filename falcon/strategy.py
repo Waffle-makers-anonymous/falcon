@@ -111,7 +111,7 @@ class ScreeningStrategy:
     bias: TradingBias = TradingBias.NEUTRAL
     style: TradingStyle = TradingStyle.CUSTOM
     instrument: str = "STK"  # Stock, OPT, FUT, etc.
-    location_code: str = "STK.US"  # US stocks
+    location_code: str = "STK.US.MAJOR"  # US major exchanges (NYSE, NASDAQ, AMEX)
 
     # Performance tracking
     performance: StrategyPerformance = field(default_factory=StrategyPerformance)
@@ -177,9 +177,8 @@ PREDEFINED_STRATEGIES = {
         filters=ScreenFilters(
             price_min=2.0,
             price_max=20.0,
-            volume_min=1_000_000,
-            market_cap_min=10_000_000,    # ~10M min for low float
-            market_cap_max=500_000_000,   # ~500M max to capture small caps
+            volume_min=500_000,  # Reduced from 1M to get more results
+            # Removed market cap filters - too restrictive for major exchanges
         ),
         bias=TradingBias.LONG,
         style=TradingStyle.MOMENTUM,
